@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-# Create directory to store sqlite database and set permissions
+# Create directory to store JSON data file and set permissions
 RUN mkdir -p /app/data && chown -R node:node /app/data
 
 EXPOSE 5000

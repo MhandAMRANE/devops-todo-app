@@ -1,1 +1,89 @@
+name: Pipeline CI/CD devops-todo-app
+
+on:
+	push:
+		branches:
+			- main
+
+permissions:
+	contents: read
+	packages: write
+
+env:
+	IMAGE_NAME: devops-todo-app
+	REPO: ghcr.io
+
+jobs:
+	test:
+		name: Test
+		runs-on: ubuntu-latest
+		steps:
+			- name: Récupérer le code source
+				uses: actions/checkout@v4
+
+			- name: Installer les dépendances backend
+				run: npm ci --prefix backend
+
+			- name: Vérifier la syntaxe du backend
+				run: node --check backend/server.js
+
+			- name: Smoke test API locale
+				run: |
+					node backend/server.js &
+					APP_PID=$!
+					sleep 3
+					curl -f http://localhost:5000/api/todos
+					kill $APP_PID
+
+	build:
+		name: Build and Push
+		runs-on: ubuntu-latest
+		needs: test
+		steps:
+			- name: Récupérer le code source
+				uses: actions/checkout@v4
+
+			- name: Calculer le nom d'image GHCR
+				run: |
+					OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+					echo "IMAGE_URI=${{ env.REPO }}/${OWNER_LC}/${{ env.IMAGE_NAME }}" >> $GITHUB_ENV
+
+			- name: Connexion à GHCR
+				uses: docker/login-action@v3
+				with:
+					registry: ${{ env.REPO }}
+					username: ${{ github.actor }}
+					password: ${{ secrets.TOKEN_CICD }}
+
+			- name: Build de l'image Docker (backend)
+				run: |
+					docker build -t $IMAGE_URI:${{ github.sha }} -t $IMAGE_URI:latest ./backend
+
+			- name: Push image version commit
+				run: docker push $IMAGE_URI:${{ github.sha }}
+
+			- name: Push image version latest
+				run: docker push $IMAGE_URI:latest
+
+	deploy:
+		name: Deploy sur VPS (SSH)
+		runs-on: ubuntu-latest
+		needs: build
+		steps:
+			- name: Déploiement à distance
+				uses: appleboy/ssh-action@v1.0.3
+				with:
+					host: ${{ secrets.HOST }}
+					username: ${{ secrets.USER }}
+					key: ${{ secrets.KEY }}
+					script: |
+						OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+						IMAGE_URI=${{ env.REPO }}/${OWNER_LC}/${{ env.IMAGE_NAME }}
+						echo "${{ secrets.TOKEN_CICD }}" | docker login ${{ env.REPO }} -u ${{ github.actor }} --password-stdin
+						docker pull $IMAGE_URI:latest
+						docker stop ${{ env.IMAGE_NAME }} || true
+						docker rm ${{ env.IMAGE_NAME }} || true
+						docker run -d --restart unless-stopped -p 5000:5000 --name ${{ env.IMAGE_NAME }} $IMAGE_URI:latest
+						sleep 10
+						curl -f http://localhost:5000/api/todos
 

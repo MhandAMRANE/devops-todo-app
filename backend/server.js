@@ -8,12 +8,18 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+const frontendDir = path.join(__dirname, "..", "frontend");
+app.use(express.static(frontendDir));
+
 // Ensure the data directory exists
 const dataDir = path.join(__dirname, "data");
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir);
 }
 const todosFile = path.join(dataDir, "todos.json");
+if (!fs.existsSync(todosFile)) {
+    fs.writeFileSync(todosFile, "[]", "utf-8");
+}
 
 // Helper to read todos from file
 function readTodos() {
@@ -32,13 +38,13 @@ function writeTodos(todos) {
 }
 
 // GET todos
-app.get("/todos", (req, res) => {
+app.get("/api/todos", (req, res) => {
     const todos = readTodos();
     res.json(todos.sort((a, b) => b.id - a.id));
 });
 
 // POST todo
-app.post("/todos", (req, res) => {
+app.post("/api/todos", (req, res) => {
     const task = (req.body.task || "").toString().trim();
     if (!task) {
         res.status(400).json({ error: "Task is required" });
@@ -57,7 +63,7 @@ app.post("/todos", (req, res) => {
 });
 
 // PATCH todo (toggle completed)
-app.patch("/todos/:id", (req, res) => {
+app.patch("/api/todos/:id", (req, res) => {
     const id = parseInt(req.params.id, 10);
     const { completed } = req.body;
     let todos = readTodos();
@@ -72,7 +78,7 @@ app.patch("/todos/:id", (req, res) => {
 });
 
 // DELETE todo
-app.delete("/todos/:id", (req, res) => {
+app.delete("/api/todos/:id", (req, res) => {
     const id = parseInt(req.params.id, 10);
     let todos = readTodos();
     const newTodos = todos.filter(t => t.id !== id);
@@ -82,6 +88,10 @@ app.delete("/todos/:id", (req, res) => {
     }
     writeTodos(newTodos);
     res.json({ success: true });
+});
+
+app.get("/", (req, res) => {
+    res.sendFile(path.join(frontendDir, "index.html"));
 });
 
 const PORT = process.env.PORT || 5000;
