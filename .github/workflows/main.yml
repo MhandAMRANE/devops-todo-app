@@ -63,7 +63,7 @@ jobs:
         run: docker push ${{ env.REPO }}/${{ github.actor }}/${{ env.IMAGE_NAME }}:1.0
 
       - name: Push image version latest
-        run: docker push ${{ env.REPO }}/${{ github.actor }}/${{ env.IMAGE_NAME }}:latest
+        run: docker push ${{ env.REPO }}/${{ github.actor }}/${{ env.IMAGE_NAME }}:latest 
 
   deploy:
     name: Deploy sur VPS (SSH)
